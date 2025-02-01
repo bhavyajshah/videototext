@@ -81,6 +81,11 @@ async function uploadFile(
       }
     }
 
+    // Ensure the upload URL starts with http
+    if (!uploadUrl.startsWith('http')) {
+      uploadUrl = `http:${uploadUrl}`
+    }
+
     return uploadUrl
   } catch (error) {
     console.error("Error in uploadFile:", error)
@@ -189,4 +194,3 @@ export async function getTranscriptInFormat(transcriptId: string, format: "txt" 
     throw error
   }
 }
-

@@ -221,18 +221,23 @@ export default function VideoUploader() {
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null
+
     if (isLoading && uploadId) {
-      intervalId = setInterval(async () => {
-        try {
-          const progress = await getUploadProgress(uploadId)
-          setUploadProgress(progress)
-        } catch (error) {
-          console.error("Error fetching upload progress:", error)
+      setUploadProgress(0)
+      let progress = 0
+      intervalId = setInterval(() => {
+        progress += 10
+        if (progress > 90) {
+          clearInterval(intervalId!)
         }
+        setUploadProgress(progress)
       }, 1000)
     }
+
     return () => {
-      if (intervalId) clearInterval(intervalId)
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
     }
   }, [isLoading, uploadId])
 
@@ -413,13 +418,19 @@ export default function VideoUploader() {
                 <WordCloud text={transcriptionResult.text} />
               </TabsContent>
               <TabsContent value="keywords">
-                <KeywordTimeline keywords={transcriptionResult.auto_highlights_result.results} />
+                <KeywordTimeline
+                  keywords={transcriptionResult?.auto_highlights_result?.results || []}
+                />
               </TabsContent>
               <TabsContent value="chapters">
-                <ChaptersList chapters={transcriptionResult.chapters} />
+                <ChaptersList
+                  chapters={transcriptionResult?.chapters || []}
+                />
               </TabsContent>
               <TabsContent value="safety">
-                <ContentSafety results={transcriptionResult.content_safety_labels.summary} />
+                <ContentSafety
+                  results={transcriptionResult?.content_safety_labels?.summary || {}}
+                />
               </TabsContent>
               <TabsContent value="analytics">
                 {/* Add an Analytics component here */}
