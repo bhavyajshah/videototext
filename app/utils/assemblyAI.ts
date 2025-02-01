@@ -1,18 +1,27 @@
-const getApiKey = () => {
-  const API_KEY = process.env.ASSEMBLYAI_API_KEY || process.env.NEXT_PUBLIC_ASSEMBLYAI_API_KEY
+const FETCH_TIMEOUT = 120000 // 2 minutes
+const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB chunks
+const BASE_URL = "https://api.assemblyai.com/v2"
+
+function getApiKey(): string {
+  const API_KEY = process.env.ASSEMBLYAI_API_KEY
   if (!API_KEY) {
     throw new Error("ASSEMBLYAI_API_KEY is not set in the environment variables")
   }
   return API_KEY
 }
 
-const BASE_URL = "https://api.assemblyai.com/v2"
-
-export async function transcribeVideo(fileBuffer: ArrayBuffer, fileName: string): Promise<any> {
+export async function transcribeVideo(
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  onProgress?: (progress: number) => Promise<void>,
+): Promise<any> {
   const API_KEY = getApiKey()
   try {
-    const uploadUrl = await uploadFile(fileBuffer, fileName)
+    console.log("Starting file upload...")
+    const uploadUrl = await uploadFile(fileBuffer, fileName, onProgress)
+    console.log("File uploaded successfully. Starting transcription...")
     const transcriptId = await startTranscription(uploadUrl)
+    console.log("Transcription started. Polling for results...")
     return await pollForTranscriptionResult(transcriptId)
   } catch (error) {
     console.error("Error in transcribeVideo:", error)
@@ -20,28 +29,69 @@ export async function transcribeVideo(fileBuffer: ArrayBuffer, fileName: string)
   }
 }
 
-async function uploadFile(fileBuffer: ArrayBuffer, fileName: string): Promise<string> {
+async function uploadFile(
+  fileBuffer: ArrayBuffer,
+  fileName: string,
+  onProgress?: (progress: number) => Promise<void>,
+): Promise<string> {
   const API_KEY = getApiKey()
   try {
-    const response = await fetch(`${BASE_URL}/upload`, {
-      method: "POST",
-      headers: {
-        Authorization: API_KEY,
-        "Content-Type": "application/octet-stream",
-      },
-      body: fileBuffer,
-    })
+    const totalChunks = Math.ceil(fileBuffer.byteLength / CHUNK_SIZE)
+    let uploadUrl = ""
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      throw new Error(`Failed to upload file: ${response.status} ${response.statusText}\n${errorBody}`)
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE
+      const end = Math.min((i + 1) * CHUNK_SIZE, fileBuffer.byteLength)
+      const chunk = fileBuffer.slice(start, end)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
+
+      try {
+        const response = await fetch(
+          `${BASE_URL}/upload${uploadUrl ? "?upload_url=" + encodeURIComponent(uploadUrl) : ""}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: API_KEY,
+              "Content-Type": "application/octet-stream",
+            },
+            body: chunk,
+            signal: controller.signal,
+          },
+        )
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorBody = await response.text()
+          console.error(`Upload failed with status ${response.status}: ${errorBody}`)
+          throw new Error(`Failed to upload file: ${response.status} ${response.statusText}\n${errorBody}`)
+        }
+
+        const data = await response.json()
+        uploadUrl = data.upload_url
+
+        if (onProgress) {
+          await onProgress(((i + 1) / totalChunks) * 100)
+        }
+      } catch (error) {
+        clearTimeout(timeoutId)
+        throw error
+      }
     }
 
-    const data = await response.json()
-    return data.upload_url
+    return uploadUrl
   } catch (error) {
     console.error("Error in uploadFile:", error)
-    throw error
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        throw new Error("Upload request timed out")
+      }
+      throw new Error(`Upload failed: ${error.message}`)
+    } else {
+      throw new Error("Upload failed due to an unknown error")
+    }
   }
 }
 
@@ -105,6 +155,7 @@ async function pollForTranscriptionResult(transcriptId: string): Promise<any> {
         throw new Error(`Transcription failed: ${data.error}`)
       }
 
+      // Wait 5 seconds before next attempt
       await new Promise((resolve) => setTimeout(resolve, 5000))
       attempts++
     } catch (error) {
@@ -135,38 +186,6 @@ export async function getTranscriptInFormat(transcriptId: string, format: "txt" 
     return await response.text()
   } catch (error) {
     console.error(`Error in getTranscriptInFormat:`, error)
-    throw error
-  }
-}
-
-export async function startRealTimeTranscription(audioStream: MediaStream): Promise<string> {
-  const API_KEY = getApiKey()
-
-  try {
-    const response = await fetch(`${BASE_URL}/realtime/token`, {
-      method: "POST",
-      headers: {
-        Authorization: API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ expires_in: 3600 }),
-    })
-
-    if (!response.ok) {
-      const errorBody = await response.text()
-      throw new Error(
-        `Failed to get real-time transcription token: ${response.status} ${response.statusText}\n${errorBody}`,
-      )
-    }
-
-    const data = await response.json()
-    if (!data.token) {
-      throw new Error("Token not found in the response")
-    }
-
-    return data.token
-  } catch (error) {
-    console.error("Error in startRealTimeTranscription:", error)
     throw error
   }
 }

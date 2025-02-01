@@ -12,16 +12,18 @@ function getBaseUrl() {
 
 export async function convertVideoToText(formData: FormData): Promise<any> {
   try {
-    const file = formData.get("file") as File
-    if (!file) {
-      throw new Error("No file provided")
+    const file = formData.get("file")
+    if (!file || !(file instanceof File)) {
+      throw new Error("No valid file provided")
     }
 
     const buffer = await file.arrayBuffer()
     const result = await transcribeVideo(buffer, file.name)
     const baseUrl = getBaseUrl()
-    result.baseUrl = baseUrl
-    return result
+    return {
+      ...result,
+      baseUrl,
+    }
   } catch (error) {
     console.error("Error in video-to-text conversion:", error)
     if (error instanceof Error) {
@@ -44,4 +46,3 @@ export async function getTranscriptFormat(transcriptId: string, format: "txt" | 
     }
   }
 }
-

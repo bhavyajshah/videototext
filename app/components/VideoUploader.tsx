@@ -21,7 +21,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import TranscriptEditor from "./TranscriptEditor"
 import AIInsights from "./AIInsights"
 import LanguageSelector from "./LanguageSelector"
-import { useSpeechRecognition } from "react-speech-recognition"
 
 export default function VideoUploader() {
   const [file, setFile] = useState<File | null>(null)
@@ -31,7 +30,6 @@ export default function VideoUploader() {
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null)
   const [isAccessible, setIsAccessible] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
-  const [liveTranscript, setLiveTranscript] = useState("")
   const [selectedLanguage, setSelectedLanguage] = useState("en-US")
   const { toast } = useToast()
   const formRef = useRef<HTMLFormElement>(null)
@@ -42,31 +40,14 @@ export default function VideoUploader() {
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
-  const {
-    transcript,
-    browserSupportsSpeechRecognition,
-    resetTranscript,
-    interimTranscript,
-    startListening,
-    stopListening,
-  } = useSpeechRecognition()
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadId, setUploadId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isRecording) return
 
-    if (browserSupportsSpeechRecognition) {
-      resetTranscript()
-      startListening({ continuous: true, language: selectedLanguage })
-    }
-
-    return () => {
-      stopListening()
-    }
-  }, [isRecording, selectedLanguage, browserSupportsSpeechRecognition, resetTranscript, startListening, stopListening])
-
-  useEffect(() => {
-    setLiveTranscript(interimTranscript)
-  }, [interimTranscript])
+    return () => { }
+  }, [isRecording])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -87,9 +68,11 @@ export default function VideoUploader() {
 
     setIsLoading(true)
     setProgress(0)
+    setUploadProgress(0)
     try {
       const formData = new FormData(formRef.current!)
       const result = await convertVideoToText(formData)
+      setUploadId(result.uploadId)
       setTranscriptionResult(result)
       toast({
         title: "Success",
@@ -105,6 +88,7 @@ export default function VideoUploader() {
     } finally {
       setIsLoading(false)
       setProgress(100)
+      setUploadProgress(100)
     }
   }
 
@@ -235,6 +219,23 @@ export default function VideoUploader() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
 
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null
+    if (isLoading && uploadId) {
+      intervalId = setInterval(async () => {
+        try {
+          const progress = await getUploadProgress(uploadId)
+          setUploadProgress(progress)
+        } catch (error) {
+          console.error("Error fetching upload progress:", error)
+        }
+      }, 1000)
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [isLoading, uploadId])
+
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden">
@@ -356,7 +357,10 @@ export default function VideoUploader() {
             <div className="text-center">
               <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
               <h2 className="text-2xl font-bold mb-2">Processing Your File</h2>
-              <p className="text-muted-foreground mb-4">This may take a few minutes for longer files.</p>
+              <p className="text-muted-foreground mb-4">
+                {uploadProgress < 100 ? `Uploading: ${uploadProgress.toFixed(0)}%` : "Transcribing..."}
+              </p>
+              <Progress value={uploadProgress} className="w-64 mx-auto mb-2" />
               <Progress value={progress} className="w-64 mx-auto" />
             </div>
           </motion.div>
@@ -439,4 +443,3 @@ export default function VideoUploader() {
     </div>
   )
 }
-
