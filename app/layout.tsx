@@ -1,3 +1,4 @@
+import "regenerator-runtime/runtime"
 import "./globals.css"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"

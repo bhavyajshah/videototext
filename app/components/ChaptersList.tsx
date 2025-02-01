@@ -51,3 +51,4 @@ export default function ChaptersList({ chapters }: ChaptersListProps) {
     </div>
   )
 }
+

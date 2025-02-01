@@ -36,3 +36,4 @@ function formatTime(ms: number): string {
     .toString()
     .padStart(2, "0")}`
 }
+

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useEffect } from "react"
+import { useRef, useEffect } from "react"
 
 interface AudioVisualizerProps {
   audioStream: MediaStream | null
@@ -32,7 +32,7 @@ export default function AudioVisualizer({ audioStream }: AudioVisualizerProps) {
 
       analyser.getByteFrequencyData(dataArray)
 
-      ctx.fillStyle = "rgb(0, 0, 0)"
+      ctx.fillStyle = "rgb(20, 20, 20)"
       ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
       const barWidth = (WIDTH / bufferLength) * 2.5
@@ -42,8 +42,10 @@ export default function AudioVisualizer({ audioStream }: AudioVisualizerProps) {
       for (let i = 0; i < bufferLength; i++) {
         barHeight = dataArray[i] / 2
 
-        ctx.fillStyle = `rgb(${barHeight + 100},50,50)`
-        ctx.fillRect(x, HEIGHT - barHeight / 2, barWidth, barHeight)
+        const hue = (i / bufferLength) * 360
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`
+
+        ctx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight)
 
         x += barWidth + 1
       }
@@ -57,6 +59,6 @@ export default function AudioVisualizer({ audioStream }: AudioVisualizerProps) {
     }
   }, [audioStream])
 
-  return <canvas ref={canvasRef} width="640" height="100" />
+  return <canvas ref={canvasRef} width="640" height="100" className="w-full h-24 rounded-lg shadow-lg" />
 }
 

@@ -65,3 +65,4 @@ export default function WordCloud({ text }: WordCloudProps) {
 
   return <svg ref={svgRef} className="w-full h-64 md:h-96" />
 }
+

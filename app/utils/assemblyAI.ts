@@ -170,3 +170,4 @@ export async function startRealTimeTranscription(audioStream: MediaStream): Prom
     throw error
   }
 }
+
